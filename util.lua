@@ -45,6 +45,15 @@ local function is_whitespace(char)
   return (char == " ") or (char == "\n") or (char == "\t")
 end
 
+local function to_lbool(val)
+  if val == 0 or val == nil then return false end
+  return true
+end
+
+local function to_ibool(val)
+  return val and 1 or 0
+end
+
 return {
   SPACE = " ",
   NEWLINE = "\n",
@@ -56,4 +65,6 @@ return {
   split_words = split_words,
   split_chars = split_chars,
   is_whitespace = is_whitespace,
+  to_lbool = to_lbool,
+  to_ibool = to_ibool,
 }

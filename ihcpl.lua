@@ -6,7 +6,7 @@
 local interpreter = require("interpreter")
 
 local function main()
-  interpreter.interpret("420 0.69 + .")
+  interpreter.interpret(arg[1])
 end
 
 return main()
