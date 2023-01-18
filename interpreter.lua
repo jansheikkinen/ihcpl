@@ -15,15 +15,19 @@ local vm = {
 
 -- ## INTERPRETER ## --
 local LEVEL = 0
-local function interpret(file)
+local function interpret(program)
   LEVEL = LEVEL + 1
 
-  local program = u.read_file(file)
   local chars = u.split_chars(program)
   table.insert(chars, " ")
   for _, c in ipairs(chars) do vm:step(c) end
 
   LEVEL = LEVEL - 1
+end
+
+local function interpret_file(file)
+  local program = u.read_file(file)
+  interpret(program)
 end
 
 local function init_repl() end
@@ -38,6 +42,19 @@ function vm:pop()
 end
 
 -- ## VM STATE MACHINE ## --
+local function print_vm_state(self, state, char)
+  u.printf("%d | %6s -> %6s %2s | %16s | ", LEVEL, state, self.state.current,
+    char, table.concat(self.state.saved_chars))
+  for _, v in ipairs(self.stack) do
+    if type(v) == "string" then
+      u.printf("\"%s\" ", v)
+    else
+      u.printf("%s ", v)
+    end
+  end
+  u.printf("\n")
+end
+
 function vm:step(char)
   local trans = self.state.transitions
   local state = self.state.current
@@ -57,12 +74,7 @@ function vm:step(char)
   local f = trans[state][ctype][2] or function(_, _) end
   f(self, char)
 
-  -- u.printf("%d | %6s -> %6s %2s | %16s | ", LEVEL, state, self.state.current, char,
-  --   table.concat(self.state.saved_chars))
-  -- for _, v in ipairs(self.stack) do
-  --   u.printf("%s ", v)
-  -- end
-  -- u.printf("\n")
+  -- print_vm_state(self, state, char)
 end
 
 function vm:save_char(char) table.insert(self.state.saved_chars, char) end
@@ -91,13 +103,13 @@ function vm:try_exec_word(char)
         vm:push(action)
         vm.defined_words["eval"](vm)
       else
-        u.panic(4, string.format("invalid word definition %s", word))
+        u.panic(4, string.format("invalid word definition %s!\n", word))
       end
     end
   end
 
   if not did_match then
-    u.panic(1, "no words have been defined with that name!\n")
+    u.panic(1, string.format("no words have been defined with that name %s!\n", word))
   end
 end
 
@@ -168,7 +180,12 @@ vm.state.transitions = {
 
 -- ## VM WORD DEFINITIONS ## --
 
--- Homoiconicity
+-- ### Homoiconicity ### --
+vm.defined_words["read"] = function(self)
+  local a = io.read("*l")
+  self:push(a)
+end
+
 vm.defined_words["eval"] = function(self)
   local a = self:pop()
   interpret(a)
@@ -249,7 +266,6 @@ end
 
 -- ### Control Flow Operations  ### --
 -- Beware of short-circuiting when popping
-
 vm.defined_words["or"] = function(self)
   local a = u.to_lbool(self:pop())
   local b = u.to_lbool(self:pop())
@@ -264,6 +280,20 @@ end
 
 vm.defined_words["not"] = function(self)
   self:push(u.to_ibool(not u.to_lbool(self:pop())))
+end
+
+vm.defined_words["if"] = function(self)
+  local a = u.to_lbool(self:pop())
+  local b = self:pop()
+  local c = self:pop()
+
+  if a then
+    self:push(b)
+    self.defined_words["eval"](vm)
+  else
+    self:push(c)
+    self.defined_words["eval"](vm)
+  end
 end
 
 -- ### Comparison Operations ### --
@@ -292,5 +322,6 @@ end
 
 return {
   interpret = interpret,
+  interpret_file = interpret_file,
   init_repl = init_repl,
 }

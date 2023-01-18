@@ -6,7 +6,7 @@
 local interpreter = require("interpreter")
 
 local function main()
-  interpreter.interpret(arg[1])
+  interpreter.interpret_file(arg[1])
 end
 
 return main()
