@@ -39,7 +39,8 @@ a REPL. Try typing `34 35 +` into the prompt to get started.
 - Number: integers and floats; cannot contain a leading or trailing '.'
 - Bool: true or false; technically defined as words equal to 1 and 0
 - String: a string of characters
-- Block: a block of code; blocks with names are called words
+- Block: a block of code, internally represented as a string; blocks with names
+are called words
 
 ### Built-in Words
 - read (void -> block): parse user input as a block and push to stack
@@ -51,6 +52,7 @@ the string(if its a valid word)
 
 - if (block block bool -> void): if the value on the top of the stack is true,
 eval the block that's now on the top of the stack, otherwise eval the next block
+- while (block bool -> void): while value is true, eval block
 - or (bool bool -> bool): true if either argument is true
 - and (bool bool -> bool): true if both arguments are true
 - not (bool -> bool): negate bool

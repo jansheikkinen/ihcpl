@@ -2,12 +2,23 @@
 
 local u = require("util")
 
+local DEBUG_MODE = false
+for _, v in ipairs(arg) do
+  if v == "-d" or v == "--debug" then
+    DEBUG_MODE = true
+  end
+end
+
 local BEGIN, INWORD, INNUM, INSTR = "BEGIN", "INWORD", "INNUM", "INSTR"
+local NORMAL, BLOCKDEF = "NORMAL", "BLOCKDEF"
+
 local vm = {
   stack = { },
   defined_words = { },
   state = {
+    meta = NORMAL,
     current = BEGIN,
+    def_level = 0,
     saved_chars = { },
     transitions = { },
   },
@@ -30,7 +41,13 @@ local function interpret_file(file)
   interpret(program)
 end
 
-local function init_repl() end
+local function init_repl()
+  while true do
+    u.printf("\n>> ")
+    local line = io.read()
+    interpret(line)
+  end
+end
 
 -- ## VM STACK ## --
 function vm:push(elem)
@@ -38,6 +55,7 @@ function vm:push(elem)
 end
 
 function vm:pop()
+  if #self.stack == 0 then u.panic(5, "attempt to pop from empty stack!\n") end
   return table.remove(self.stack)
 end
 
@@ -74,7 +92,9 @@ function vm:step(char)
   local f = trans[state][ctype][2] or function(_, _) end
   f(self, char)
 
-  -- print_vm_state(self, state, char)
+  if DEBUG_MODE then
+    print_vm_state(self, state, char)
+  end
 end
 
 function vm:save_char(char) table.insert(self.state.saved_chars, char) end
@@ -191,6 +211,14 @@ vm.defined_words["eval"] = function(self)
   interpret(a)
 end
 
+vm.defined_words["["] = function(self)
+  self.state.def_level = self.state.def_level + 1
+end
+
+vm.defined_words["]"] = function(self)
+  self.state.def_level = self.state.def_level - 1
+end
+
 vm.defined_words["alias"] = function(self)
   self.defined_words[self:pop()] = self:pop()
 end
@@ -249,7 +277,9 @@ vm.defined_words["+"] = function(self)
 end
 
 vm.defined_words["-"] = function(self)
-  self:push(self:pop() - self:pop())
+  local a = self:pop()
+  local b = self:pop()
+  self:push(b - a)
 end
 
 vm.defined_words["*"] = function(self)
@@ -257,7 +287,9 @@ vm.defined_words["*"] = function(self)
 end
 
 vm.defined_words["/"] = function(self)
-  self:push(self:pop() / self:pop())
+  local a = self:pop()
+  local b = self:pop()
+  self:push(b / a)
 end
 
 vm.defined_words["%"] = function(self)
@@ -296,6 +328,22 @@ vm.defined_words["if"] = function(self)
   end
 end
 
+vm.defined_words["while"] = function(self)
+  local a = self:pop()
+  local b = self:pop()
+
+  self:push(a)
+  self.defined_words["eval"](vm)
+
+  while u.to_lbool(self:pop()) do
+    self:push(b)
+    self.defined_words["eval"](vm)
+
+    self:push(a)
+    self.defined_words["eval"](vm)
+  end
+end
+
 -- ### Comparison Operations ### --
 vm.defined_words["="] = function(self)
   self:push((self:pop() == self:pop()) and 1 or 0)
@@ -317,8 +365,14 @@ vm.defined_words[">="] = "over over > rot> = or"
 
 -- ### Miscellaneous Operations ### --
 vm.defined_words["."] = function(self)
-  print(self:pop())
+  if not DEBUG_MODE then
+    u.printf("%s", self:pop())
+  else
+    self:pop()
+  end
 end
+
+vm.defined_words[".ln"] = ". \"\n\" ."
 
 return {
   interpret = interpret,

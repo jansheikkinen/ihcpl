@@ -6,7 +6,11 @@
 local interpreter = require("interpreter")
 
 local function main()
-  interpreter.interpret_file(arg[1])
+  if #arg == 0 then
+    interpreter.init_repl()
+  else
+    interpreter.interpret_file(arg[1])
+  end
 end
 
 return main()
