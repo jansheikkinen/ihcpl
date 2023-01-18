@@ -41,10 +41,19 @@ local function split_chars(str)
   return t
 end
 
+local function is_whitespace(char)
+  return (char == " ") or (char == "\n") or (char == "\t")
+end
+
 return {
+  SPACE = " ",
+  NEWLINE = "\n",
+  TAB = "\t",
+  EOF = -1,
   panic = panic,
   printf = printf,
   read_file = read_file,
   split_words = split_words,
   split_chars = split_chars,
+  is_whitespace = is_whitespace,
 }

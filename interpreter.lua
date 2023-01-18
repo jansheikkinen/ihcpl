@@ -1,13 +1,13 @@
 -- interpreter.lua
 
-local utils = require("util")
+local u = require("util")
 
-local BEGIN, INWORD, INNUM, INSTR = "begin", "inword", "innum", "instr"
+local BEGIN, INWORD, INNUM, INSTR = "BEGIN", "INWORD", "INNUM", "INSTR"
 local vm = {
   stack = { },
   defined_words = { },
   state = {
-    current = "begin",
+    current = BEGIN,
     saved_chars = { },
     transitions = { },
   },
@@ -29,21 +29,30 @@ function vm:step(char)
   local ctype = 4
   if tonumber(char) ~= nil then
     ctype = 1
+  elseif char == "." and state == INNUM then
+    ctype = 1
   elseif char == "\"" or char == "\'" then
     ctype = 2
-  elseif char == " " or char == "\n" or char == "\t" then
+  elseif char == u.SPACE or char == u.NEWLINE
+    or char == u.TAB or char == u.EOF then
     ctype = 3
   end
 
   self.state.current = trans[state][ctype][1]
   local f = trans[state][ctype][2] or function(_, _) end
   f(self, char)
+
+  -- u.printf("%6s -> %6s %2s | %s\n", state, self.state.current, char,
+  --   table.concat(self.state.saved_chars))
 end
 
 function vm:save_char(char) table.insert(self.state.saved_chars, char) end
 
 function vm:pop_word(char)
-  table.insert(char)
+  if not u.is_whitespace(char) and char ~= "\"" and char ~= "'" then
+    table.insert(self.state.saved_chars, char)
+  end
+
   local word = table.concat(self.state.saved_chars)
   self.state.saved_chars = { }
   return word
@@ -61,7 +70,7 @@ function vm:try_exec_word(char)
   end
 
   if not did_match then
-    utils.panic(1, "no words have been defined with that name!")
+    u.panic(1, "no words have been defined with that name!")
   end
 end
 
@@ -72,7 +81,7 @@ function vm:try_push_num(char)
     self:push(tonumber(word))
   else
     -- theoretically unreachable(?)
-    utils.panic(2, "not a valid number!")
+    u.panic(2, "not a valid number!")
   end
 end
 
@@ -107,18 +116,18 @@ vm.state.transitions = {
   INWORD = {
     { INWORD, vm.save_char },
     { INWORD, vm.save_char },
-    { BEGIN,  try_exec_word },
+    { BEGIN,  vm.try_exec_word },
     { INWORD, vm.save_char },
   },
   INNUM = {
     { INNUM,  vm.save_char },
     { INWORD, vm.save_char },
-    { BEGIN,  vm.push_num  },
+    { BEGIN,  vm.try_push_num  },
     { INWORD, vm.save_char },
   },
   INSTR = {
     { INSTR, vm.save_char },
-    { BEGIN, vm.push_str },
+    { BEGIN, vm.try_push_str },
     { INSTR, vm.save_char },
     { INSTR, vm.save_char },
   },
@@ -138,7 +147,8 @@ end
 -- ## INTERPRETER ## --
 local function interpret(file)
   local program = file
-  local chars = utils.split_chars(program)
+  local chars = u.split_chars(program)
+  table.insert(chars, " ")
   for _, c in ipairs(chars) do vm:step(c) end
 end
 
