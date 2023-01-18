@@ -8,7 +8,7 @@ local vm = {
   defined_words = { },
   state = {
     current = "begin",
-    processed_chars = { },
+    saved_chars = { },
     transitions = { },
   },
 }
@@ -42,8 +42,46 @@ end
 
 function vm:save_char(char) table.insert(self.state.saved_chars, char) end
 
+function vm:pop_word(char)
+  table.insert(char)
+  local word = table.concat(self.state.saved_chars)
+  self.state.saved_chars = { }
+  return word
+end
+
 function vm:try_exec_word(char)
-  -- TODO
+  local word = self:pop_word(char)
+
+  local did_match = false
+  for dword, action in pairs(self.defined_words) do
+    if dword == word then
+      did_match = true
+      action(vm)
+    end
+  end
+
+  if not did_match then
+    utils.panic(1, "no words have been defined with that name!")
+  end
+end
+
+function vm:try_push_num(char)
+  local word = self:pop_word(char)
+
+  if tonumber(word) ~= nil then
+    self:push(tonumber(word))
+  else
+    -- theoretically unreachable(?)
+    utils.panic(2, "not a valid number!")
+  end
+end
+
+function vm:try_push_str(char)
+  local word = self:pop_word(char)
+
+  -- TODO: str vs char validation
+  -- TODO: remove "" and ''
+  self:push(word)
 end
 
 --[
@@ -67,22 +105,22 @@ vm.state.transitions = {
     { INWORD, vm.save_char },
   },
   INWORD = {
-    { INWORD, nil },
-    { INWORD, nil },
-    { BEGIN,  nil },
-    { INWORD, nil },
+    { INWORD, vm.save_char },
+    { INWORD, vm.save_char },
+    { BEGIN,  try_exec_word },
+    { INWORD, vm.save_char },
   },
   INNUM = {
-    { INNUM, nil },
-    { INWORD, nil },
-    { BEGIN, nil },
-    { INWORD, nil },
+    { INNUM,  vm.save_char },
+    { INWORD, vm.save_char },
+    { BEGIN,  vm.push_num  },
+    { INWORD, vm.save_char },
   },
   INSTR = {
-    { INSTR, nil },
-    { BEGIN, nil },
-    { INSTR, nil },
-    { INSTR, nil },
+    { INSTR, vm.save_char },
+    { BEGIN, vm.push_str },
+    { INSTR, vm.save_char },
+    { INSTR, vm.save_char },
   },
 }
 
