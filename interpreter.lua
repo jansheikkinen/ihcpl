@@ -68,10 +68,21 @@ end
 
 -- ## VM STATE MACHINE ## --
 local function print_vm_state(self, state, char)
-  u.printf("%d | %6s -> %6s %2s %2d | %16s | %16s | ",
-    LEVEL, state, self.state.current, char,
-    self.state.def_level, table.concat(self.state.block_queue, " "),
-    table.concat(self.state.saved_chars))
+  u.printf("VM: %d", LEVEL)
+
+  u.printf("\n | STATE: %s & '", state)
+  if char == u.NEWLINE then u.printf("\\n")
+  else u.printf("%s", char) end
+  u.printf("' -> %s", self.state.current)
+
+  u.printf("\n | BLOCKDEF LEVEL: %d | ", self.state.def_level)
+  for _, v in ipairs(self.state.block_queue) do
+    u.printf("\"%s\" ", v)
+  end
+
+  u.printf("\n | SAVED CHARS: ", table.concat(self.state.saved_chars))
+
+  u.printf("\n | STACK: ")
   for _, v in ipairs(self.stack) do
     if type(v) == "string" then
       u.printf("\"%s\" ", v)
@@ -80,6 +91,19 @@ local function print_vm_state(self, state, char)
     end
   end
   u.printf("\n")
+
+  -- u.printf("%d | %6s -> %6s %2s %2d | %16s | %16s | ",
+  --   LEVEL, state, self.state.current, char,
+  --   self.state.def_level, table.concat(self.state.block_queue, " "),
+  --   table.concat(self.state.saved_chars))
+  -- for _, v in ipairs(self.stack) do
+  --   if type(v) == "string" then
+  --     u.printf("\"%s\" ", v)
+  --   else
+  --     u.printf("%s ", v)
+  --   end
+  -- end
+  -- u.printf("\n")
 end
 
 function vm:step(char)
@@ -426,6 +450,14 @@ vm.defined_words["."] = function(self)
   else
     self:pop()
   end
+end
+
+vm.defined_words["quit"] = function(_)
+  os.exit(0)
+end
+
+vm.defined_words["exit"] = function(self)
+  os.exit(self:pop())
 end
 
 vm.defined_words[".ln"] = ". \"\n\" ."
