@@ -1,3 +1,6 @@
-"test2.ihcpl" require
+[
+  [ [ 1 + ] ] [ [ 2 + ] ] readnum if "addN" alias
+  68 addN .
+] "main" alias
 
-68 inc .
+main

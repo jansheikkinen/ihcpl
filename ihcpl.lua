@@ -1,7 +1,7 @@
 #!/bin/lua
 
 -- ihcpl.lua
--- a interpreted homoiconic concatenative programming language
+-- an interpreted homoiconic concatenative programming language
 
 local interpreter = require("interpreter")
 

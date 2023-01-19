@@ -32,7 +32,7 @@ local function interpret(program)
 
   local chars = u.split_chars(program)
   table.insert(chars, " ")
-  for _, c in ipairs(chars) do vm:step(c) end
+  for i, c in ipairs(chars) do vm:step(i, c) end
 
   LEVEL = LEVEL - 1
 end
@@ -67,20 +67,20 @@ function vm:pop()
 end
 
 -- ## VM STATE MACHINE ## --
-local function print_vm_state(self, state, char)
+local function print_vm_state(self, state, index, char)
   u.printf("VM: %d", LEVEL)
 
-  u.printf("\n | STATE: %s & '", state)
-  if char == u.NEWLINE then u.printf("\\n")
-  else u.printf("%s", char) end
-  u.printf("' -> %s", self.state.current)
+  u.printf("\n | STATE: %s & ", state)
+  if char == u.NEWLINE then u.printf("`\\n`")
+  else u.printf("('%s', %d)", char, index) end
+  u.printf(" -> %s | %s", self.state.current, self.state.meta)
 
   u.printf("\n | BLOCKDEF LEVEL: %d | ", self.state.def_level)
   for _, v in ipairs(self.state.block_queue) do
     u.printf("\"%s\" ", v)
   end
 
-  u.printf("\n | SAVED CHARS: ", table.concat(self.state.saved_chars))
+  u.printf("\n | SAVED CHARS: %s", table.concat(self.state.saved_chars))
 
   u.printf("\n | STACK: ")
   for _, v in ipairs(self.stack) do
@@ -91,22 +91,9 @@ local function print_vm_state(self, state, char)
     end
   end
   u.printf("\n")
-
-  -- u.printf("%d | %6s -> %6s %2s %2d | %16s | %16s | ",
-  --   LEVEL, state, self.state.current, char,
-  --   self.state.def_level, table.concat(self.state.block_queue, " "),
-  --   table.concat(self.state.saved_chars))
-  -- for _, v in ipairs(self.stack) do
-  --   if type(v) == "string" then
-  --     u.printf("\"%s\" ", v)
-  --   else
-  --     u.printf("%s ", v)
-  --   end
-  -- end
-  -- u.printf("\n")
 end
 
-function vm:step(char)
+function vm:step(index, char)
   local trans = self.state.transitions
   local state = self.state.current
   local ctype = 4
@@ -126,15 +113,22 @@ function vm:step(char)
   f(self, char)
 
   if DEBUG_MODE then
-    print_vm_state(self, state, char)
+    print_vm_state(self, state, index, char)
   end
 end
 
-function vm:save_char(char) table.insert(self.state.saved_chars, char) end
+function vm:save_char(char)
+  if (char == "\"" or char == "'") and self.state.meta == NORMAL then return end
+  table.insert(self.state.saved_chars, char)
+end
 
 function vm:pop_word(char)
-  if not u.is_whitespace(char) and char ~= "\"" and char ~= "'" then
-    table.insert(self.state.saved_chars, char)
+  if self.state.meta == BLOCKDEF then
+    if not u.is_whitespace(char) then table.insert(self.state.saved_chars, char) end
+  elseif self.state.meta == NORMAL then
+    if not u.is_whitespace and char ~= "\"" and char ~= "'" then
+      table.insert(self.state.saved_chars, char)
+    end
   end
 
   local word = table.concat(self.state.saved_chars)
@@ -147,7 +141,7 @@ function vm:blockdef(word)
     self.defined_words["]"](self)
   else
     if word == "[" then
-      self.state.def_level = self.state.def_level + 1
+      self.defined_words["["](self)
     end
 
     table.insert(self.state.block_queue, word)
@@ -238,7 +232,7 @@ end
 vm.state.transitions = {
   BEGIN = {
     { INNUM,  vm.save_char },
-    { INSTR,  nil }, -- don't save quotations
+    { INSTR,  vm.save_char },
     { BEGIN,  nil },
     { INWORD, vm.save_char },
   },
@@ -268,6 +262,10 @@ vm.state.transitions = {
 vm.defined_words["read"] = function(self)
   local a = io.read("*l")
   self:push(a)
+end
+
+vm.defined_words["readnum"] = function(self)
+  self:push(io.read("*n"))
 end
 
 vm.defined_words["eval"] = function(self)
@@ -462,6 +460,8 @@ vm.defined_words["exit"] = function(self)
   os.exit(self:pop())
 end
 
+-- TODO: an infinite loop can be created by making two files mutually
+-- require each other, causing a stack overflow
 vm.defined_words["require"] = function(self)
   interpret_file(self:pop())
 end
