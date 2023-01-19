@@ -452,6 +452,8 @@ vm.defined_words["."] = function(self)
   end
 end
 
+vm.defined_words[".ln"] = ". \"\n\" ."
+
 vm.defined_words["quit"] = function(_)
   os.exit(0)
 end
@@ -460,7 +462,9 @@ vm.defined_words["exit"] = function(self)
   os.exit(self:pop())
 end
 
-vm.defined_words[".ln"] = ". \"\n\" ."
+vm.defined_words["require"] = function(self)
+  interpret_file(self:pop())
+end
 
 return {
   interpret = interpret,
