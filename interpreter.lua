@@ -19,6 +19,7 @@ local vm = {
     meta = NORMAL,
     current = BEGIN,
     def_level = 0,
+    block_queue = { },
     saved_chars = { },
     transitions = { },
   },
@@ -46,6 +47,12 @@ local function init_repl()
     u.printf("\n>> ")
     local line = io.read()
     interpret(line)
+
+    u.printf("=> [ ")
+    for i = 1, #vm.stack do
+      u.printf("%s ", vm.stack[i])
+    end
+    u.printf("]\n")
   end
 end
 
@@ -61,8 +68,10 @@ end
 
 -- ## VM STATE MACHINE ## --
 local function print_vm_state(self, state, char)
-  u.printf("%d | %6s -> %6s %2s | %16s | ", LEVEL, state, self.state.current,
-    char, table.concat(self.state.saved_chars))
+  u.printf("%d | %6s -> %6s %2s %2d | %16s | %16s | ",
+    LEVEL, state, self.state.current, char,
+    self.state.def_level, table.concat(self.state.block_queue, " "),
+    table.concat(self.state.saved_chars))
   for _, v in ipairs(self.stack) do
     if type(v) == "string" then
       u.printf("\"%s\" ", v)
@@ -109,8 +118,21 @@ function vm:pop_word(char)
   return word
 end
 
+function vm:blockdef(word)
+  if word == "]" then
+    self.defined_words["]"](self)
+  else
+    if word == "[" then
+      self.state.def_level = self.state.def_level + 1
+    end
+
+    table.insert(self.state.block_queue, word)
+  end
+end
+
 function vm:try_exec_word(char)
   local word = self:pop_word(char)
+  if self.state.meta == BLOCKDEF then return self:blockdef(word) end
 
   local did_match = false
   for dword, action in pairs(self.defined_words) do
@@ -135,6 +157,7 @@ end
 
 function vm:try_push_num(char)
   local word = self:pop_word(char)
+  if self.state.meta == BLOCKDEF then return self:blockdef(word) end
 
   if tonumber(word) ~= nil then
     self:push(tonumber(word))
@@ -146,6 +169,7 @@ end
 
 function vm:try_push_str(char)
   local word = self:pop_word(char)
+  if self.state.meta == BLOCKDEF then return self:blockdef(word) end
 
   if char == "'" then
     if word == u.SPACE or word == u.NEWLINE or word == u.TAB or #word == 1 then
@@ -159,15 +183,31 @@ function vm:try_push_str(char)
 end
 
 --[
--- e: execute word
--- p: push value if valid
 --
--- ###### | number | dquote  | whitespace | other  |
+-- ## character-level automaton
+--
+-- ###### | number | quote   | whitespace | other  |
 -- -------+--------+---------+------------+--------+
 -- begin  | innum  | instr   | begin      | inword |
--- inword | inword | inword  | begin/e    | inword |
--- innum  | innum  | inword  | begin/p    | inword |
--- instr  | instr  | begin/p | instr      | instr  |
+-- inword | inword | inword  | begin/*    | inword |
+-- innum  | innum  | inword  | begin/*    | inword |
+-- instr  | instr  | begin/* | instr      | instr  |
+--
+-- * pass to word-level automaton
+--
+-- ## word-level automaton
+--
+-- The word-level automaton acts as normal while the vm's def_level is 0.
+-- If [ is enountered, the def_level increments and the meta-state is changed
+-- to BLOCKDEF, if it isn't already
+-- If ] is encountered, def_level decrements and meta-state is changed to
+-- NORMAL if def_level is now 0
+--
+-- While in NORMAL mode, the automaton pushes numbers and strings to the stack,
+-- and executes words
+-- While in BLOCKDEF mode, the automaton interprets characters as normal, but
+-- pushes all data to a block queue, which gets compiled to a string and pushed
+-- to the stack when ] is encountered
 --
 --]
 
@@ -187,7 +227,7 @@ vm.state.transitions = {
   INNUM = {
     { INNUM,  vm.save_char },
     { INWORD, vm.save_char },
-    { BEGIN,  vm.try_push_num  },
+    { BEGIN,  vm.try_push_num },
     { INWORD, vm.save_char },
   },
   INSTR = {
@@ -212,15 +252,31 @@ vm.defined_words["eval"] = function(self)
 end
 
 vm.defined_words["["] = function(self)
+  self.state.meta = BLOCKDEF
   self.state.def_level = self.state.def_level + 1
 end
 
 vm.defined_words["]"] = function(self)
+  if self.state.def_level > 1 then
+    table.insert(self.state.block_queue, "]")
+  end
+
   self.state.def_level = self.state.def_level - 1
+  if self.state.def_level == 0 then
+    self.state.meta = NORMAL
+
+    local block = table.concat(self.state.block_queue, " ")
+    self.state.block_queue = { }
+    self:push(block)
+  end
 end
 
 vm.defined_words["alias"] = function(self)
   self.defined_words[self:pop()] = self:pop()
+end
+
+vm.defined_words["dealias"] = function(self)
+  self.defined_words[self:pop()] = nil
 end
 
 -- ### Stack Manipulation Operations ### --

@@ -46,8 +46,7 @@ local function is_whitespace(char)
 end
 
 local function to_lbool(val)
-  if val == 0 or val == nil then return false end
-  return true
+  return val ~= 0 and val ~= nil
 end
 
 local function to_ibool(val)
